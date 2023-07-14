@@ -1,0 +1,41 @@
+const int T;
+
+// Minimum probability that Alice authenticates
+Pmin=? [ F (autA) ]
+
+// Minimum probability that Eve authenticates
+Pmin=? [ F (autE) ]
+
+// Maximum probability that Eve authenticates by a replay attack
+Pmax=? [ F<=T (autE&replay_attack) ]
+
+// Minimum probability that Eve discovers a key (takes into account the knowledge of kA and/or kB)
+Pmin=? [ F (skE>0) ]
+
+// Maximum probability that Eve discovers a key (takes into account the knowledge of kA and/or kB)
+Pmax=? [ F<=T (skE>0) ]
+
+// Minimum number of Alice's authentications
+R{"authentications"}min=? [ C<=T ]
+
+// Maximum number of Alice's authentications
+R{"authentications"}max=? [ C<=T ]
+
+// Maximum number of exchanged messages until an attack succedes
+R{"messages"}max=? [ F (autE) ]
+
+// Minimum number of exchanged messages until an attack succedes
+R{"messages"}min=? [ F (autE) ]
+
+// Maximum number of units of computational resources needed to perform an attack
+R{"resources"}max=? [ F (autE) ]
+
+// Minimum number of units of computational resources needed to perform an attack
+R{"resources"}min=? [ F (autE) ]
+
+// Minimum number of rounds needed to Eve to discover the session key
+R{"rounds"}min=? [ F (skE>0) ]
+
+// Minimum cost of executing a replay attack
+R{"messages"}min=? [ F (autE&replay_attack) ]+R{"resources"}min=? [ F (autE&replay_attack) ]+R{"rounds"}min=? [ F (autE&replay_attack) ]
+

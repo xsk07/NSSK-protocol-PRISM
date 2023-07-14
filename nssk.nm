@@ -1,0 +1,273 @@
+// Needham-Schroeder Symmetric-Key (NSSK) Protocol 
+
+mdp
+
+// Likelihood of discovering the key:
+// a) 0.001 or 0.01, depending on the cryptographic algorithm (e.g., SHA-256);
+// b) Depending on the attacker's capabilities:
+//	0.1, if Eve is a highly skilled and resourceful attacker with advanced computational power,
+//	0.5, if moderate or significant chance of key discovery;
+
+const double p; // probability that Eve can discover one of the keys
+
+formula beginA = stateA=0 & kA>0 & nA=0 & skA=0 & nbA=0;
+formula beginB = stateB=0 & kB>0 & skB=0 & nB=0;
+formula beginC = stateC=0 & kaC>0 & kbC>0 & naC=0;
+formula begin = beginA & beginB & beginC; // begin of a round
+formula beginBe = stateBe=0 & skBe=0 & nBe=0;
+formula beginE = stateE=0 & naE=0 & nbE=0 & skE!=1 & nE=0
+		& !knows_msg1 & !has_dec_msg1
+		& !knows_msg2 & !has_dec_msg2
+		& !knows_msg3 & !has_dec_msg3
+		& !knows_msg4 & !has_dec_msg4
+		& !knows_msg5 & !has_dec_msg5
+		& !knows_msg4e & !has_dec_msg4e;
+formula doneA = stateA=3;
+formula doneB = stateB=3;
+formula doneC = stateC=2;
+formula doneE = stateE=3;
+formula doneBe = stateBe=3;
+formula done = doneA & doneB & doneC;
+
+// Alice is authenticated when:
+// - all the participants of the protocol have done, 
+// - Alice and Bob share the same secret key, and Alice knows the Bob's nonce
+//  (so she can reply correctly to the Bob's challenge).
+formula autA = doneA & doneB & skA>0 & skA=skB & nB>0 & nbA=nB & !mitm_attack;
+// Eve is authenticated when: 
+// - Eve and Bob have finished (for that comunication),
+// - Eve and Bob share the same secret key, and Eve knows the Bob's nonce
+//  (so she can reply correctly to the Bob's challenge).
+formula replay_attack = doneE & doneBe & skE>0 & skE=skBe & nE>0 & nE=nBe;
+formula mitm_attack = mitm=3;  
+// Eve is authenticated whenever a replay attack or a man-in-the-middle attack is successful 
+formula autE = replay_attack | mitm_attack;
+
+// Formulae defining messages: 
+// - guards of the actions of the receivers,
+// - become true when the message is sent.
+formula msg1 = stateA=1 & nA>0 & skA=0 & nbA=0 & stateC=0 & naC=0; // Alice performs a session key's request to Cathy
+formula msg2 = stateC=2 & naC>0 & skC=1 & stateA=1 & nA>0 & skA=0 & nbA=0; // Cathy sends the session to Alice
+formula msg3 = stateA=1 & nA>0 & skA>0 & skA=skC & nbA=0 & stateB=0 & skB=0 & nB=0; // Alice shares the session key with Bob
+formula msg4 = stateB=2 & skB>0 & nB>0 & stateA=1 & nA>0 & skA>0 & nbA=0; // Bob sends the nonce (challenge)
+formula msg5 = stateA=3 & nA>0 & skA>0 & nbA>0 & stateB=2 & skB>0 & nB>0; // Alice replies to the challenge
+// Eve's messages (Replay Attack)
+formula msg3e = stateE=1 & skE>0 & nE=0 & stateBe=0 & skBe=0 & nBe=0;
+formula msg4e = stateBe=2 & skBe>0 & nBe>0 & stateE=1 & skE>0 & nE=0; 
+formula msg5e = stateE=3 & skE>0 & nE>0 & stateBe=2 & skBe>0 & nBe>0;
+
+module Alice
+        stateA: [0..3] init 0; // 0-init, 1-message sent, 2-message received, 3-done
+	kA: [0..1] init 1;
+	nA: [0..1] init 0; 
+	skA: [0..1] init 0;
+	nbA: [0..1] init 0;
+
+	[snd_msg1] beginA -> (stateA'=1) & (nA'=1); // sends msg1
+        [rec_msg2] msg2 -> (stateA'=2) & (skA'=skC);// receives msg2 
+	[snd_msg3] stateA=2 & nA>0 & skA>0 & nbA=0 -> (stateA'=1); // sends msg3 
+	[rec_msg4] msg4 & mitm=0 -> (stateA'=2) & (nbA'=nB); // receives msg4
+	[snd_msg5] stateA=2 & nA>0 & skA>0 & nbA>0 -> (stateA'=3); // sends msg5
+	[reset] doneA -> (stateA'=0) & (nA'=0) & (skA'=0) & (nbA'=0);
+
+	// Man-In-The-Middle 
+	[rec_msg4] msg4 & mitm=2 -> (stateA'=2) & (nbA'=nB); // receives msg4
+endmodule
+
+// Server (Cathy)
+module Cathy
+	stateC: [0..2] init 0; // 0-waiting, 1-message received, 2-message sent/done
+	kaC: [0..1] init 1;
+	kbC: [0..1] init 1;
+	skC: [0..2] init 0; // 0-no session key, 1-fresh session key, 2-old session key
+	naC: [0..1] init 0;
+
+	// Alice's messages
+	[rec_msg1] beginC & msg1 -> (stateC'=1) & (naC'=nA); // receive msg1
+	[snd_msg2] stateC=1 & naC=nA -> (stateC'=2) & (skC'=1); // send msg2
+	[reset] doneC -> (stateC'=0) & (naC'=0) & (skC'=2); 
+endmodule
+
+module Bob
+	// Variables for the comunication with Alice
+        stateB: [0..3] init 0; // 0-init, 1-message received, 2-message sent, 3-done
+	kB: [0..1] init 1;
+	nB: [0..1] init 0;
+	skB: [0..1] init 0; 
+	
+	// Variables for the comunication with Eve
+	stateBe: [0..3] init 0;
+	nBe: [0..1] init 0;
+	skBe: [0..2] init 0; 
+
+	[rec_msg3] beginB & msg3 & mitm=0 -> (stateB'=1) & (skB'=skA); // receives msg3
+	[snd_msg4] stateB=1 & skB>0 & nB=0 -> (stateB'=2) & (nB'=1); // sends msg4
+	[rec_msg5] msg5 & mitm=0 -> (stateB'=3); // receives msg5
+	[reset] doneB & ((stateBe=0 & stateE=0) | stateBe=3 | mitm_attack) -> (stateB'=0) & (skB'=0) & (nB'=0) 
+									    & (stateBe'=0) & (skBe'=0) & (nBe'=0);
+
+	// Eve's messages (Replay Attack)
+	[rec_msg3e] msg3e -> (stateBe'=1) & (skBe'=skE);
+	[snd_msg4e] stateBe=1 & skBe>0 & nBe=0 -> (stateBe'=2) & (nBe'=1);
+	[rec_msg5e] msg5e -> (stateBe'=3);
+
+	// Man-In-The-Middle
+	[rec_msg3] beginB & msg3 & mitm=1 -> (stateB'=1) & (skB'=skA); // receives msg3
+	[rec_msg5] msg5 & mitm=3 -> (stateB'=3); // receives msg5
+endmodule
+
+module Eve
+	stateE: [0..3] init 0;
+	naE: [0..1] init 0; // Alice's nonce intercepted by Eve in the comuncation between Alice and Bob
+	nbE: [0..1] init 0; // Bob's nonce intercepted by Eve in the comuncation between Bob and Alice
+	skE: [0..2] init 0; 
+	nE: [0..1] init 0; // nonce of msg4e received by Bob in the comunication between Bob and Eve
+
+	// Knowledge's variables
+	knows_kA: bool init false;
+	knows_kB: bool init false;
+	// The knowledge refers always to the current session. 
+	// Recall that Eve is always listening and all the messages, from the first round on, are intercepted.
+	// So, abstractly Eve knows every message of every round until now.
+	knows_msg1: bool init false; has_dec_msg1: bool init false;
+	knows_msg2: bool init false; has_dec_msg2: bool init false;
+	knows_msg3: bool init false; has_dec_msg3: bool init false;
+	knows_msg4: bool init false; has_dec_msg4: bool init false;
+	knows_msg5: bool init false; has_dec_msg5: bool init false;
+	knows_msg4e: bool init false; has_dec_msg4e: bool init false;
+	initial_round: bool init true; // true iff it is the first round (i.e. round 0)
+	// Man-In-The-Middle attack phases: 
+	//  0-no mitm, 
+	//  1-impersonates Bob/Alice for msg3 
+	//  2-impersonated Alce/Bob for msg4, 
+	//  3-impersonated Bob/Alice for msg5
+	mitm: [0..3] init 0;
+
+	// Crack keys
+	[guess_kA] !autE & stateE=0 & !knows_kA -> p:(knows_kA'=true) + (1-p):true;
+	[guess_kB] !autE & stateE=0 & !knows_kB -> p:(knows_kB'=true) + (1-p):true;
+	[guess_new_sk] !autE & stateE=0 & skC=1 & skE!=skC -> p:(skE'=skC) + (1-p):true; 
+	// We abstract from the numerical value and we consider skE=2 as a key of any of the previous session keys
+	[guess_old_sk] !initial_round & !autE & stateE=0 & skC=1 & skE=0 -> p:(skE'=2) + (1-p):true; 
+	
+	// Guesses Bob's nonce
+	[guess_nB] !autE & stateE=0 & nbE=0 & nB>0 -> p:(nbE'=nB) + (1-p):true; 
+
+	// Eavesdroppings 
+	// The guard is true because it is a synchronized command. 
+	// The command is enabled only when the synchronized action 
+	// is enabled for the other modules involved into the synchronization.
+	[snd_msg1] true -> (knows_msg1'=true); 
+	[snd_msg2] true -> (knows_msg2'=true);
+	[snd_msg3] true -> (knows_msg3'=true); 
+ 	[snd_msg4] true -> (knows_msg4'=true);
+ 	[snd_msg5] true -> (knows_msg5'=true);
+
+	// Message decryption and depacking
+	[dec_msg1] !autE & stateE=0 & knows_msg1 & !has_dec_msg1 -> (naE'=nA) & (has_dec_msg1'=true);
+	[dec_msg2] !autE & stateE=0 & (knows_msg2 & knows_kA) & !has_dec_msg2 -> (naE'=nA) & (skE'=skC) & (knows_msg3'=true) & (has_dec_msg2'=true);
+	[dec_msg3] !autE & stateE=0 & (knows_msg3 & knows_kB) & !has_dec_msg3 -> (skE'=skC) & (has_dec_msg3'=true);
+ 	[dec_msg4] !autE & stateE=0 & (knows_msg4 & skE=skC) & !has_dec_msg4 -> (nbE'=nB) & (has_dec_msg4'=true);
+ 	[dec_msg5] !autE & stateE=0 & (knows_msg5 & skE=skA) & !has_dec_msg5 -> (nbE'=nbA) & (has_dec_msg5'=true);
+	
+	// At every round, the knowledge of the messages is resetted,
+	// since it refers to the messages of the current session.
+	[reset] skE!=1 -> (knows_msg1'=false) & (has_dec_msg1'=false)
+			& (knows_msg2'=false) & (has_dec_msg2'=false) 
+			& (knows_msg3'=false) & (has_dec_msg3'=false) 
+			& (knows_msg4'=false) & (has_dec_msg4'=false) 
+			& (knows_msg5'=false) & (has_dec_msg5'=false) 
+			& (knows_msg4e'=false) & (has_dec_msg4e'=false)
+			& (initial_round'=false) & (stateE'=0)
+			& (naE'=0) & (nbE'=0) & (nE'=0) & (mitm'=0);
+	// If the key is set to fresh after the reset it must be old
+	[reset] skE=1 -> (knows_msg1'=false) & (has_dec_msg1'=false)
+			& (knows_msg2'=false) & (has_dec_msg2'=false) 
+			& (knows_msg3'=false) & (has_dec_msg3'=false) 
+			& (knows_msg4'=false) & (has_dec_msg4'=false) 
+			& (knows_msg5'=false) & (has_dec_msg5'=false) 
+			& (knows_msg4e'=false) & (has_dec_msg4e'=false)
+			& (initial_round'=false) & (stateE'=0)
+			& (naE'=0) & (nbE'=0) & (skE'=2) & (nE'=0) & (mitm'=0) ;
+	
+	// Replay Attack 
+	[snd_msg3e] !autE & stateE=0 & mitm=0 & knows_msg3 & skE=1 & skE=skC & stateBe=0 -> (stateE'=1) & (nE'=0) & (knows_msg4e'=false) & (has_dec_msg4e'=false); // current key 
+	// For old keys the assumption is that we know all the messages
+	[snd_msg3e] !autE & mitm=0 & stateE=0 & skE=2 & stateBe=0 -> (stateE'=1) & (nE'=0) & (knows_msg4e'=false) & (has_dec_msg4e'=false); // old key 
+	[rec_msg4e] !autE & mitm=0 & msg4e -> (stateE'=2) & (knows_msg4e'=true);
+	[dec_msg4e] mitm=0 & (knows_msg4e & skE=skBe) & !has_dec_msg4e -> (nE'=1) & (has_dec_msg4e'=true);
+	[snd_msg5e] stateE=2 & mitm=0 & skE>0 & nE>0 -> (stateE'=3); 
+	
+	// Man-In-The-Middle (MITM) Attack
+	[mitm_msg3] stateE=0 & mitm=0 & msg3 -> (stateE'=1) & (mitm'=1);
+	[mitm_msg4] stateE=1 & mitm=1 & msg4 -> (stateE'=2) & (mitm'=2);
+	[mitm_msg5] stateE=2 & mitm=2 & msg5 -> (stateE'=3) & (mitm'=3);
+endmodule
+
+// Very useful also for debugging
+label "beginA" = beginA;
+label "beginB" = beginB;
+label "beginC" = beginC;
+label "begin" = begin;
+label "beginBe" = beginBe;
+label "beginE" = beginE;
+label "doneA" = doneA;
+label "doneB" = doneB;
+label "doneC" = doneC;
+label "done" = done;
+label "doneE" = doneE;
+label "doneBe" = doneBe;
+label "autA" = autA;
+label "autE" = autE;
+label "msg1" = msg1;
+label "msg2" = msg2;
+label "msg3" = msg3; 
+label "msg4" = msg4;
+label "msg5" = msg5;
+label "msg3e" = msg3e;
+label "msg4e" = msg4e;
+label "msg5e" = msg5e;
+label "replay_attack" = replay_attack;
+label "mitm_attack" = mitm_attack;
+label "discovered_sk" = skE>0;  
+
+// number of elapsed rounds
+rewards "rounds"
+	// A new round starts when Alice begins a new comunication with Cathy
+	[snd_msg1] true: 1;
+endrewards
+
+// number of elapsed sessions
+rewards "sessions"
+	// a new session begins when Cathy generates a new session key
+	[snd_msg2] true: 1;
+endrewards
+
+// number of authentications
+rewards "authentications"
+	[rec_msg5] true : 1;
+endrewards
+
+// number of exchanged messages
+rewards "messages"
+	[snd_msg1] true: 1; 
+	[snd_msg2] true: 1;
+	[snd_msg3] true: 1;
+ 	[snd_msg4] true: 1;
+ 	[snd_msg5] true: 1;
+	[snd_msg3e] true: 1;
+	[snd_msg4e] true: 1;
+	[snd_msg5e] true: 1;
+endrewards
+
+// resources' consumption
+rewards "resources"
+	[guess_kA] true: 1;
+	[guess_kB] true: 1; 
+	[guess_new_sk] true: 1;
+	[guess_old_sk] true: 1;
+	[guess_nB] true: 1;
+endrewards
+
+
+
