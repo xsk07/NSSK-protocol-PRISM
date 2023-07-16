@@ -9,28 +9,28 @@ Pmin=? [ F (autE) ]
 // Maximum probability that Eve authenticates by a replay attack
 Pmax=? [ F<=T (autE&replay_attack) ]
 
-// Minimum probability that Eve discovers a key (takes into account the knowledge of kA and/or kB)
+// Minimum probability that Eve discovers a session key (past or current)
 Pmin=? [ F (skE>0) ]
 
-// Maximum probability that Eve discovers a key (takes into account the knowledge of kA and/or kB)
+// Maximum probability that Eve discovers a session key (past or current)
 Pmax=? [ F<=T (skE>0) ]
 
-// Minimum number of Alice's authentications
+// Minimum expected number of Alice's authentications
 R{"authentications"}min=? [ C<=T ]
 
-// Maximum number of Alice's authentications
+// Maximum expected number of Alice's authentications
 R{"authentications"}max=? [ C<=T ]
 
-// Maximum number of exchanged messages until an attack succedes
+// Maximum number of exchanged messages until an Eve authentication succedes
 R{"messages"}max=? [ F (autE) ]
 
-// Minimum number of exchanged messages until an attack succedes
+// Minimum number of exchanged messages until an Eve authentication succedes
 R{"messages"}min=? [ F (autE) ]
 
-// Maximum number of units of computational resources needed to perform an attack
+// Maximum number of units of computational resources needed to Eve to authenticate
 R{"resources"}max=? [ F (autE) ]
 
-// Minimum number of units of computational resources needed to perform an attack
+// Minimum number of units of computational resources needed to Eve to authenticate
 R{"resources"}min=? [ F (autE) ]
 
 // Minimum number of rounds needed to Eve to discover the session key
@@ -38,4 +38,28 @@ R{"rounds"}min=? [ F (skE>0) ]
 
 // Minimum cost of executing a replay attack
 R{"messages"}min=? [ F (autE&replay_attack) ]+R{"resources"}min=? [ F (autE&replay_attack) ]+R{"rounds"}min=? [ F (autE&replay_attack) ]
+
+// Maximum probability that Alice authenticates 
+Pmax=? [ F (autA) ]
+
+// Key agreement property
+P>=1 [ F (skA>0&skA=skB) ]
+
+// Key freshness property
+P>=1 [ G ((skC=0|skC=2) U skC=1) ]
+
+// Secrecy property
+P>=1 [ G (skE=0) ]
+
+// Property for the synthesis of a strategy in which Eve authenticates via a replay attack using the current key
+Pmax=? [ F (autE&replay_attack&!knows_kB&!knows_kA&skE=1) ]
+
+// Property for the synthesis of a strategy in which Eve authenticates via a replay attack using a previous key
+Pmax=? [ F (autE&replay_attack&!knows_kB&!knows_kA&skE=2) ]
+
+// Property for the synthesis of a strategy in which Eve authenticates via the Man In The Middle attack
+Pmax=? [ F (autE&mitm_attack) ]
+
+// Authentication property
+P>=1[F(autA)]
 

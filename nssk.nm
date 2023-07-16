@@ -2,7 +2,7 @@
 
 mdp
 
-// Likelihood of discovering the key:
+// Likelihood of discovering one of the keys:
 // a) 0.001 or 0.01, depending on the cryptographic algorithm (e.g., SHA-256);
 // b) Depending on the attacker's capabilities:
 //	0.1, if Eve is a highly skilled and resourceful attacker with advanced computational power,
@@ -188,7 +188,7 @@ module Eve
 			& (knows_msg5'=false) & (has_dec_msg5'=false) 
 			& (knows_msg4e'=false) & (has_dec_msg4e'=false)
 			& (initial_round'=false) & (stateE'=0)
-			& (naE'=0) & (nbE'=0) & (skE'=2) & (nE'=0) & (mitm'=0) ;
+			& (naE'=0) & (nbE'=0) & (skE'=2) & (nE'=0) & (mitm'=0);
 	
 	// Replay Attack 
 	[snd_msg3e] !autE & stateE=0 & mitm=0 & knows_msg3 & skE=1 & skE=skC & stateBe=0 -> (stateE'=1) & (nE'=0) & (knows_msg4e'=false) & (has_dec_msg4e'=false); // current key 
@@ -245,7 +245,7 @@ endrewards
 
 // number of authentications
 rewards "authentications"
-	[rec_msg5] true : 1;
+	[rec_msg5] mitm=0 : 1;
 endrewards
 
 // number of exchanged messages
@@ -268,6 +268,3 @@ rewards "resources"
 	[guess_old_sk] true: 1;
 	[guess_nB] true: 1;
 endrewards
-
-
-
